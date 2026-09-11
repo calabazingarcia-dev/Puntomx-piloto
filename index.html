@@ -1,1 +1,198 @@
-<!doctype html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f172a"><title>PuntoMX — Piloto</title><link rel="stylesheet" href="styles.css"><link rel="manifest" href="manifest.webmanifest"><script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script></head><body><header class="topbar"><div><div class="brand">PuntoMX</div><div class="tagline">Reporta exactamente dónde está el problema.</div></div><button id="locateBtn">📍</button></header><main><section class="stats"><div><strong id="totalCount">0</strong><span>Reportes</span></div><div><strong id="pendingCount">0</strong><span>Pendientes</span></div><div><strong id="resolvedCount">0</strong><span>Resueltos</span></div></section><section class="map-wrap"><div id="map"></div><button id="newReportBtn" class="fab">＋ Reportar problema</button></section><section class="panel"><div class="panel-head"><h2>Mis reportes</h2><button id="clearBtn">Borrar piloto</button></div><div id="reports"></div></section></main><div id="modal" class="modal hidden"><div class="modal-card"><div class="panel-head"><h2>Nuevo reporte</h2><button id="closeModal">×</button></div><form id="reportForm"><label>Tipo<select id="type" required><option value="">Selecciona...</option><option>💡 Luminaria apagada</option><option>🕳️ Bache</option><option>💧 Fuga de agua</option><option>🗑️ Basura acumulada</option><option>🚦 Semáforo descompuesto</option><option>🌳 Espacio público deteriorado</option><option>⚠️ Otro</option></select></label><label>Descripción<textarea id="description" maxlength="500" rows="4" required></textarea></label><label>Fotografía<input id="photo" type="file" accept="image/*" capture="environment"></label><label>Video (máximo 10 segundos)<input id="video" type="file" accept="video/*" capture="environment"><small>El piloto valida la duración.</small></label><div class="location-box"><b>Ubicación</b><span id="locationStatus">Aún no obtenida</span><button type="button" id="getLocation" class="secondary">Obtener GPS</button></div><div id="preview"></div><button class="primary">Publicar reporte</button></form></div></div><div id="detailModal" class="modal hidden"><div class="modal-card"><div class="panel-head"><h2>Detalle</h2><button id="closeDetail">×</button></div><div id="detail"></div></div></div><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+
+  <title>PuntoMX — Piloto</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  >
+
+  <!-- Estilos de PuntoMX -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Leaflet JavaScript -->
+  <script
+    defer
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  ></script>
+</head>
+
+<body>
+
+  <header class="topbar">
+    <div>
+      <div class="brand">PuntoMX</div>
+      <div class="tagline">
+        Reporta exactamente dónde está el problema.
+      </div>
+    </div>
+
+    <button id="locateBtn">📍</button>
+  </header>
+
+  <main>
+
+    <section class="stats">
+      <div>
+        <strong id="totalCount">0</strong>
+        <span>Reportes</span>
+      </div>
+
+      <div>
+        <strong id="pendingCount">0</strong>
+        <span>Pendientes</span>
+      </div>
+
+      <div>
+        <strong id="resolvedCount">0</strong>
+        <span>Resueltos</span>
+      </div>
+    </section>
+
+    <section class="map-wrap">
+
+      <div id="map"></div>
+
+      <button id="newReportBtn" class="fab">
+        ＋ Reportar problema
+      </button>
+
+    </section>
+
+    <section class="panel">
+
+      <div class="panel-head">
+        <h2>Mis reportes</h2>
+        <button id="clearBtn">Borrar piloto</button>
+      </div>
+
+      <div id="reports"></div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal: Nuevo reporte -->
+  <div id="modal" class="modal hidden">
+
+    <div class="modal-card">
+
+      <div class="panel-head">
+        <h2>Nuevo reporte</h2>
+        <button id="closeModal">×</button>
+      </div>
+
+      <form id="reportForm">
+
+        <label>
+          Tipo
+
+          <select id="type" required>
+            <option value="">Selecciona...</option>
+            <option>💡 Luminaria apagada</option>
+            <option>🕳️ Bache</option>
+            <option>💧 Fuga de agua</option>
+            <option>🗑️ Basura acumulada</option>
+            <option>🚦 Semáforo descompuesto</option>
+            <option>🌳 Espacio público deteriorado</option>
+            <option>⚠️ Otro</option>
+          </select>
+        </label>
+
+        <label>
+          Descripción
+
+          <textarea
+            id="description"
+            maxlength="500"
+            rows="4"
+            required
+          ></textarea>
+        </label>
+
+        <label>
+          Fotografía
+
+          <input
+            id="photo"
+            type="file"
+            accept="image/*"
+            capture="environment"
+          >
+        </label>
+
+        <label>
+          Video (máximo 10 segundos)
+
+          <input
+            id="video"
+            type="file"
+            accept="video/*"
+            capture="environment"
+          >
+
+          <small>
+            El piloto valida la duración.
+          </small>
+        </label>
+
+        <div class="location-box">
+
+          <b>Ubicación</b>
+
+          <span id="locationStatus">
+            Aún no obtenida
+          </span>
+
+          <button
+            type="button"
+            id="getLocation"
+            class="secondary"
+          >
+            Obtener GPS
+          </button>
+
+        </div>
+
+        <div id="preview"></div>
+
+        <button class="primary">
+          Publicar reporte
+        </button>
+
+      </form>
+
+    </div>
+
+  </div>
+
+  <!-- Modal: Detalle -->
+  <div id="detailModal" class="modal hidden">
+
+    <div class="modal-card">
+
+      <div class="panel-head">
+        <h2>Detalle</h2>
+        <button id="closeDetail">×</button>
+      </div>
+
+      <div id="detail"></div>
+
+    </div>
+
+  </div>
+
+  <!-- JavaScript de PuntoMX -->
+  <script src="app.js"></script>
+
+</body>
+</html>
