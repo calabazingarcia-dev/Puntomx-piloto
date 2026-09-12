@@ -7,23 +7,20 @@
 
   <title>PuntoMX — Piloto</title>
 
-  <!-- Leaflet CSS -->
+  <!-- Leaflet -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   >
 
-  <!-- Estilos de PuntoMX -->
+  <!-- Estilos PuntoMX -->
   <link rel="stylesheet" href="styles.css">
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.webmanifest">
 
-  <!-- Leaflet JavaScript -->
-  <script
-    defer
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-  ></script>
+  <!-- Leaflet SIN defer -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 
 <body>
@@ -59,13 +56,11 @@
     </section>
 
     <section class="map-wrap">
-
       <div id="map"></div>
 
       <button id="newReportBtn" class="fab">
         ＋ Reportar problema
       </button>
-
     </section>
 
     <section class="panel">
@@ -81,7 +76,7 @@
 
   </main>
 
-  <!-- Modal: Nuevo reporte -->
+  <!-- NUEVO REPORTE -->
   <div id="modal" class="modal hidden">
 
     <div class="modal-card">
@@ -175,7 +170,7 @@
 
   </div>
 
-  <!-- Modal: Detalle -->
+  <!-- DETALLE -->
   <div id="detailModal" class="modal hidden">
 
     <div class="modal-card">
@@ -191,7 +186,7 @@
 
   </div>
 
-  <!-- JavaScript de PuntoMX -->
+  <!-- JavaScript PuntoMX -->
   <script src="app.js"></script>
 
 </body>
