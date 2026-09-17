@@ -7,10 +7,10 @@ const STORAGE_PUBLIC = `${SUPABASE_URL}/storage/v1/object/public/reports`;
 
 let map;
 let markersLayer;
+let reports = [];
 let currentLocation = null;
 let selectedPhoto = null;
 let selectedVideo = null;
-let reports = [];
 
 function $(id) {
   return document.getElementById(id);
@@ -29,17 +29,6 @@ function escapeHtml(value) {
 
 function generateReportCode() {
   return "MX-" + Math.floor(10000000 + Math.random() * 90000000);
-}
-
-function formatDate(date) {
-  try {
-    return new Date(date).toLocaleString("es-MX", {
-      dateStyle: "short",
-      timeStyle: "short"
-    });
-  } catch {
-    return date || "";
-  }
 }
 
 /* =========================
@@ -70,7 +59,7 @@ function initMap() {
 }
 
 /* =========================
-   CARGAR REPORTES
+   REPORTES
 ========================= */
 
 async function loadReports() {
@@ -93,6 +82,7 @@ async function loadReports() {
 
     renderReports();
     updateStats();
+    renderReportList();
 
   } catch (error) {
     console.error("Error cargando reportes:", error);
@@ -109,6 +99,7 @@ function renderReports() {
   markersLayer.clearLayers();
 
   reports.forEach(report => {
+
     if (
       typeof report.latitude !== "number" ||
       typeof report.longitude !== "number"
@@ -121,32 +112,46 @@ function renderReports() {
       report.longitude
     ]);
 
-    marker.bindPopup(createPopupContent(report), {
-      maxWidth: 320
-    });
+    marker.bindPopup(
+      createPopupContent(report),
+      {
+        maxWidth: 320
+      }
+    );
 
     marker.addTo(markersLayer);
   });
 }
 
 /* =========================
-   CONTENIDO DEL MARCADOR
+   POPUP
 ========================= */
 
 function createPopupContent(report) {
-  const type = escapeHtml(report.type || "Problema reportado");
+
+  const type = escapeHtml(
+    report.type || "Problema reportado"
+  );
+
   const description = escapeHtml(
     report.description || "Sin descripción."
   );
 
-  const status = escapeHtml(report.status || "Pendiente");
-  const code = escapeHtml(report.report_code || "");
+  const status = escapeHtml(
+    report.status || "Pendiente"
+  );
+
+  const code = escapeHtml(
+    report.report_code || ""
+  );
 
   let media = "";
 
   if (report.photo_url) {
+
     media += `
       <div style="margin-top:10px;">
+
         <img
           src="${escapeHtml(report.photo_url)}"
           alt="Evidencia fotográfica"
@@ -156,16 +161,20 @@ function createPopupContent(report) {
             object-fit:cover;
             border-radius:10px;
             display:block;
+            cursor:pointer;
           "
           onclick="openMedia('${escapeHtml(report.photo_url)}','photo')"
         >
+
       </div>
     `;
   }
 
   if (report.video_url) {
+
     media += `
       <div style="margin-top:10px;">
+
         <video
           controls
           playsinline
@@ -177,9 +186,15 @@ function createPopupContent(report) {
             display:block;
           "
         >
-          <source src="${escapeHtml(report.video_url)}">
+
+          <source
+            src="${escapeHtml(report.video_url)}"
+          >
+
           Tu navegador no puede reproducir este video.
+
         </video>
+
       </div>
     `;
   }
@@ -196,7 +211,7 @@ function createPopupContent(report) {
         font-weight:bold;
         margin-bottom:7px;
       ">
-        💡 ${type}
+        ${type}
       </div>
 
       <div style="
@@ -221,14 +236,6 @@ function createPopupContent(report) {
         <strong>Reporte:</strong> ${code}
       </div>
 
-      <div style="
-        font-size:12px;
-        color:#666;
-        margin-top:3px;
-      ">
-        ${formatDate(report.created_at)}
-      </div>
-
       ${media}
 
     </div>
@@ -236,11 +243,12 @@ function createPopupContent(report) {
 }
 
 /* =========================
-   VISUALIZAR FOTO
+   FOTO GRANDE
 ========================= */
 
 function openMedia(url, type) {
-  const existing = document.getElementById("mediaViewer");
+
+  const existing = $("mediaViewer");
 
   if (existing) {
     existing.remove();
@@ -262,40 +270,19 @@ function openMedia(url, type) {
         align-items:center;
         justify-content:center;
         padding:20px;
-        cursor:pointer;
       "
     >
 
-      ${
-        type === "video"
-          ? `
-            <video
-              controls
-              autoplay
-              playsinline
-              style="
-                max-width:95%;
-                max-height:90%;
-                border-radius:12px;
-              "
-              onclick="event.stopPropagation()"
-            >
-              <source src="${escapeHtml(url)}">
-            </video>
-          `
-          : `
-            <img
-              src="${escapeHtml(url)}"
-              style="
-                max-width:95%;
-                max-height:90%;
-                object-fit:contain;
-                border-radius:12px;
-              "
-              onclick="event.stopPropagation()"
-            >
-          `
-      }
+      <img
+        src="${escapeHtml(url)}"
+        style="
+          max-width:95%;
+          max-height:90%;
+          object-fit:contain;
+          border-radius:12px;
+        "
+        onclick="event.stopPropagation()"
+      >
 
     </div>
   `;
@@ -304,7 +291,8 @@ function openMedia(url, type) {
 }
 
 function closeMediaViewer() {
-  const viewer = document.getElementById("mediaViewer");
+
+  const viewer = $("mediaViewer");
 
   if (viewer) {
     viewer.remove();
@@ -316,6 +304,7 @@ function closeMediaViewer() {
 ========================= */
 
 function updateStats() {
+
   const total = reports.length;
 
   const pending = reports.filter(
@@ -326,21 +315,79 @@ function updateStats() {
     r => (r.status || "") === "Resuelto"
   ).length;
 
-  const totalElement = $("totalReports");
-  const pendingElement = $("pendingReports");
-  const resolvedElement = $("resolvedReports");
-
-  if (totalElement) {
-    totalElement.textContent = total;
+  if ($("totalCount")) {
+    $("totalCount").textContent = total;
   }
 
-  if (pendingElement) {
-    pendingElement.textContent = pending;
+  if ($("pendingCount")) {
+    $("pendingCount").textContent = pending;
   }
 
-  if (resolvedElement) {
-    resolvedElement.textContent = resolved;
+  if ($("resolvedCount")) {
+    $("resolvedCount").textContent = resolved;
   }
+}
+
+/* =========================
+   LISTA DE REPORTES
+========================= */
+
+function renderReportList() {
+
+  const container = $("reports");
+
+  if (!container) return;
+
+  if (reports.length === 0) {
+
+    container.innerHTML = `
+      <div style="
+        padding:20px;
+        text-align:center;
+        color:#666;
+      ">
+        Todavía no hay reportes.
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML = reports.map(report => {
+
+    return `
+      <div style="
+        border:1px solid #ddd;
+        border-radius:10px;
+        padding:12px;
+        margin-bottom:10px;
+      ">
+
+        <strong>
+          ${escapeHtml(report.type)}
+        </strong>
+
+        <div style="
+          font-size:13px;
+          margin-top:5px;
+        ">
+          ${escapeHtml(report.description || "")}
+        </div>
+
+        <div style="
+          font-size:12px;
+          color:#666;
+          margin-top:6px;
+        ">
+          ${escapeHtml(report.report_code)}
+          ·
+          ${escapeHtml(report.status || "Pendiente")}
+        </div>
+
+      </div>
+    `;
+
+  }).join("");
 }
 
 /* =========================
@@ -348,25 +395,44 @@ function updateStats() {
 ========================= */
 
 function getLocation() {
+
   return new Promise((resolve, reject) => {
+
     if (!navigator.geolocation) {
-      reject(new Error("Este dispositivo no permite obtener GPS."));
+
+      reject(
+        new Error(
+          "Este dispositivo no permite obtener GPS."
+        )
+      );
+
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
+
       position => {
+
         currentLocation = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
+
+          latitude:
+            position.coords.latitude,
+
+          longitude:
+            position.coords.longitude,
+
+          accuracy:
+            position.coords.accuracy
+
         };
 
         resolve(currentLocation);
       },
+
       error => {
         reject(error);
       },
+
       {
         enableHighAccuracy: true,
         timeout: 15000,
@@ -377,73 +443,48 @@ function getLocation() {
 }
 
 /* =========================
-   MODAL DE REPORTE
+   ABRIR FORMULARIO
 ========================= */
 
 function openReportForm() {
-  const modal = $("reportModal");
 
-  if (!modal) {
-    console.error("No se encontró reportModal.");
-    return;
-  }
-
-  modal.style.display = "flex";
+  $("modal").classList.remove("hidden");
 
   selectedPhoto = null;
   selectedVideo = null;
 
-  const photoInput = $("photoInput");
-  const videoInput = $("videoInput");
+  $("photo").value = "";
+  $("video").value = "";
 
-  if (photoInput) photoInput.value = "";
-  if (videoInput) videoInput.value = "";
+  $("preview").innerHTML = "";
 
-  const photoPreview = $("photoPreview");
-  const videoPreview = $("videoPreview");
-
-  if (photoPreview) {
-    photoPreview.innerHTML = "";
-  }
-
-  if (videoPreview) {
-    videoPreview.innerHTML = "";
-  }
+  $("locationStatus").textContent =
+    "Obteniendo ubicación...";
 
   getLocation()
+
     .then(location => {
-      const gpsElement = $("gpsStatus");
 
-      if (gpsElement) {
-        gpsElement.textContent =
-          `📍 Ubicación obtenida ±${Math.round(location.accuracy)} m`;
-      }
+      currentLocation = location;
 
-      const lat = $("latitude");
-      const lng = $("longitude");
-
-      if (lat) lat.value = location.latitude;
-      if (lng) lng.value = location.longitude;
+      $("locationStatus").textContent =
+        `📍 Ubicación obtenida ±${Math.round(location.accuracy)} m`;
 
     })
+
     .catch(error => {
+
       console.error(error);
 
-      const gpsElement = $("gpsStatus");
+      $("locationStatus").textContent =
+        "⚠️ No se pudo obtener la ubicación.";
 
-      if (gpsElement) {
-        gpsElement.textContent =
-          "⚠️ No se pudo obtener la ubicación.";
-      }
     });
 }
 
 function closeReportForm() {
-  const modal = $("reportModal");
 
-  if (modal) {
-    modal.style.display = "none";
-  }
+  $("modal").classList.add("hidden");
 }
 
 /* =========================
@@ -451,29 +492,29 @@ function closeReportForm() {
 ========================= */
 
 function handlePhoto(event) {
+
   const file = event.target.files[0];
 
   if (!file) return;
 
   selectedPhoto = file;
 
-  const preview = $("photoPreview");
-
-  if (!preview) return;
-
   const url = URL.createObjectURL(file);
 
-  preview.innerHTML = `
-    <img
-      src="${url}"
-      style="
-        width:100%;
-        max-height:220px;
-        object-fit:cover;
-        border-radius:10px;
-        margin-top:8px;
-      "
-    >
+  $("preview").innerHTML = `
+    <div style="margin-top:10px;">
+
+      <img
+        src="${url}"
+        style="
+          width:100%;
+          max-height:220px;
+          object-fit:cover;
+          border-radius:10px;
+        "
+      >
+
+    </div>
   `;
 }
 
@@ -482,6 +523,7 @@ function handlePhoto(event) {
 ========================= */
 
 function handleVideo(event) {
+
   const file = event.target.files[0];
 
   if (!file) return;
@@ -493,20 +535,16 @@ function handleVideo(event) {
   video.preload = "metadata";
 
   video.onloadedmetadata = () => {
+
     URL.revokeObjectURL(video.src);
 
     if (video.duration > 10.05) {
+
       alert(
         "El video no puede durar más de 10 segundos."
       );
 
       event.target.value = "";
-
-      const preview = $("videoPreview");
-
-      if (preview) {
-        preview.innerHTML = "";
-      }
 
       selectedVideo = null;
 
@@ -515,12 +553,11 @@ function handleVideo(event) {
 
     selectedVideo = file;
 
-    const preview = $("videoPreview");
+    const url = URL.createObjectURL(file);
 
-    if (preview) {
-      const url = URL.createObjectURL(file);
+    $("preview").innerHTML += `
+      <div style="margin-top:10px;">
 
-      preview.innerHTML = `
         <video
           controls
           playsinline
@@ -528,29 +565,25 @@ function handleVideo(event) {
             width:100%;
             max-height:220px;
             border-radius:10px;
-            margin-top:8px;
           "
         >
+
           <source src="${url}">
+
         </video>
 
-        <div style="
-          font-size:12px;
-          margin-top:4px;
-          color:#666;
-        ">
-          Video válido: máximo 10 segundos.
-        </div>
-      `;
-    }
+      </div>
+    `;
   };
 
   video.onerror = () => {
+
     alert(
       "No fue posible comprobar la duración del video."
     );
 
     event.target.value = "";
+
     selectedVideo = null;
   };
 
@@ -561,12 +594,19 @@ function handleVideo(event) {
    SUBIR ARCHIVO
 ========================= */
 
-async function uploadFile(file, reportCode, prefix) {
+async function uploadFile(
+  file,
+  reportCode,
+  prefix
+) {
+
   if (!file) return null;
 
   const extension =
     file.name.includes(".")
-      ? file.name.substring(file.name.lastIndexOf("."))
+      ? file.name.substring(
+          file.name.lastIndexOf(".")
+        )
       : "";
 
   const filename =
@@ -575,18 +615,29 @@ async function uploadFile(file, reportCode, prefix) {
   const url =
     `${STORAGE_API}/reports/${filename}`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": file.type || "application/octet-stream"
-    },
-    body: file
-  });
+  const response = await fetch(
+    url,
+    {
+      method: "POST",
+
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization:
+          `Bearer ${SUPABASE_KEY}`,
+
+        "Content-Type":
+          file.type ||
+          "application/octet-stream"
+      },
+
+      body: file
+    }
+  );
 
   if (!response.ok) {
-    const errorText = await response.text();
+
+    const errorText =
+      await response.text();
 
     console.error(
       "Error subiendo archivo:",
@@ -603,112 +654,159 @@ async function uploadFile(file, reportCode, prefix) {
 }
 
 /* =========================
-   CREAR REPORTE
+   PUBLICAR REPORTE
 ========================= */
 
 async function publishReport() {
-  const typeElement = $("reportType");
-  const descriptionElement = $("description");
 
   const type =
-    typeElement?.value || "Problema ciudadano";
+    $("type").value;
 
   const description =
-    descriptionElement?.value?.trim() || "";
+    $("description").value.trim();
 
-  const latitude =
-    parseFloat($("latitude")?.value);
-
-  const longitude =
-    parseFloat($("longitude")?.value);
-
-  const accuracy =
-    parseFloat($("gpsAccuracy")?.value || "0");
-
-  if (!Number.isFinite(latitude) ||
-      !Number.isFinite(longitude)) {
+  if (!type) {
 
     alert(
-      "Primero necesitamos obtener tu ubicación GPS."
+      "Selecciona el tipo de problema."
     );
 
     return;
   }
 
-  if (!selectedPhoto && !selectedVideo) {
+  if (!description) {
+
     alert(
-      "Agrega una fotografía o un video como evidencia."
+      "Escribe una descripción."
     );
 
     return;
   }
 
-  const reportCode = generateReportCode();
+  if (!currentLocation) {
+
+    alert(
+      "Primero obtén la ubicación GPS."
+    );
+
+    return;
+  }
+
+  if (!selectedPhoto &&
+      !selectedVideo) {
+
+    alert(
+      "Agrega una fotografía o un video."
+    );
+
+    return;
+  }
+
+  const reportCode =
+    generateReportCode();
+
+  const publishButton =
+    $("reportForm").querySelector(
+      'button[type="submit"]'
+    );
+
+  if (publishButton) {
+    publishButton.disabled = true;
+    publishButton.textContent =
+      "Publicando...";
+  }
 
   try {
-
-    showPublishingMessage(
-      "Publicando reporte..."
-    );
 
     let photoUrl = null;
     let videoUrl = null;
 
-    if (selectedPhoto) {
-      showPublishingMessage(
-        "Subiendo fotografía..."
-      );
+    /* FOTO */
 
-      photoUrl = await uploadFile(
-        selectedPhoto,
-        reportCode,
-        "foto"
-      );
+    if (selectedPhoto) {
+
+      photoUrl =
+        await uploadFile(
+          selectedPhoto,
+          reportCode,
+          "foto"
+        );
     }
+
+    /* VIDEO */
 
     if (selectedVideo) {
-      showPublishingMessage(
-        "Subiendo video..."
-      );
 
-      videoUrl = await uploadFile(
-        selectedVideo,
-        reportCode,
-        "video"
-      );
+      videoUrl =
+        await uploadFile(
+          selectedVideo,
+          reportCode,
+          "video"
+        );
     }
 
-    showPublishingMessage(
-      "Guardando reporte..."
-    );
+    /* BASE DE DATOS */
 
     const body = {
-      report_code: reportCode,
-      type: type,
-      description: description,
-      latitude: latitude,
-      longitude: longitude,
-      gps_accuracy: Number.isFinite(accuracy)
-        ? accuracy
-        : null,
-      photo_url: photoUrl,
-      video_url: videoUrl,
-      status: "Pendiente"
+
+      report_code:
+        reportCode,
+
+      type:
+        type,
+
+      description:
+        description,
+
+      latitude:
+        currentLocation.latitude,
+
+      longitude:
+        currentLocation.longitude,
+
+      gps_accuracy:
+        currentLocation.accuracy,
+
+      photo_url:
+        photoUrl,
+
+      video_url:
+        videoUrl,
+
+      status:
+        "Pendiente"
     };
 
-    const response = await fetch(REPORTS_API, {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation"
-      },
-      body: JSON.stringify(body)
-    });
+    const response =
+      await fetch(
+        REPORTS_API,
+        {
+          method: "POST",
+
+          headers: {
+
+            apikey:
+              SUPABASE_KEY,
+
+            Authorization:
+              `Bearer ${SUPABASE_KEY}`,
+
+            "Content-Type":
+              "application/json",
+
+            Prefer:
+              "return=representation"
+          },
+
+          body:
+            JSON.stringify(body)
+        }
+      );
 
     if (!response.ok) {
-      const errorText = await response.text();
+
+      const errorText =
+        await response.text();
 
       console.error(
         "Error creando reporte:",
@@ -721,34 +819,58 @@ async function publishReport() {
       );
     }
 
-    const created = await response.json();
+    const created =
+      await response.json();
 
     closeReportForm();
+
+    $("reportForm").reset();
+
+    currentLocation = null;
+    selectedPhoto = null;
+    selectedVideo = null;
+
+    $("preview").innerHTML = "";
+
+    $("locationStatus").textContent =
+      "Aún no obtenida";
+
+    if (created && created[0]) {
+
+      reports.unshift(
+        created[0]
+      );
+
+    } else {
+
+      await loadReports();
+
+    }
+
+    renderReports();
+    renderReportList();
+    updateStats();
+
+    if (map) {
+
+      map.setView(
+        [
+          body.latitude,
+          body.longitude
+        ],
+        16
+      );
+
+    }
 
     alert(
       `Reporte ${reportCode} creado correctamente.`
     );
 
-    if (created && created[0]) {
-      reports.unshift(created[0]);
-    } else {
-      await loadReports();
-    }
-
-    renderReports();
-    updateStats();
-
-    if (map) {
-      map.setView(
-        [latitude, longitude],
-        16
-      );
-    }
-
   } catch (error) {
 
     console.error(
-      "ERROR COMPLETO AL PUBLICAR:",
+      "ERROR COMPLETO:",
       error
     );
 
@@ -758,114 +880,103 @@ async function publishReport() {
     );
 
   } finally {
-    hidePublishingMessage();
+
+    if (publishButton) {
+
+      publishButton.disabled = false;
+
+      publishButton.textContent =
+        "Publicar reporte";
+    }
   }
 }
 
 /* =========================
-   MENSAJE DE PUBLICACIÓN
-========================= */
-
-function showPublishingMessage(message) {
-  let element = $("publishingMessage");
-
-  if (!element) {
-    element = document.createElement("div");
-
-    element.id = "publishingMessage";
-
-    element.style.position = "fixed";
-    element.style.left = "50%";
-    element.style.top = "50%";
-    element.style.transform = "translate(-50%, -50%)";
-    element.style.background = "rgba(0,0,0,.85)";
-    element.style.color = "white";
-    element.style.padding = "20px 25px";
-    element.style.borderRadius = "12px";
-    element.style.zIndex = "100000";
-    element.style.fontSize = "16px";
-    element.style.textAlign = "center";
-    element.style.maxWidth = "80%";
-
-    document.body.appendChild(element);
-  }
-
-  element.textContent = message;
-  element.style.display = "block";
-}
-
-function hidePublishingMessage() {
-  const element = $("publishingMessage");
-
-  if (element) {
-    element.style.display = "none";
-  }
-}
-
-/* =========================
-   BOTONES / EVENTOS
+   EVENTOS
 ========================= */
 
 function setupEvents() {
 
-  const reportButton = $("reportButton");
+  /* NUEVO REPORTE */
 
-  if (reportButton) {
-    reportButton.addEventListener(
+  $("newReportBtn")
+    .addEventListener(
       "click",
       openReportForm
     );
-  }
 
-  const closeButton = $("closeReportModal");
+  /* CERRAR MODAL */
 
-  if (closeButton) {
-    closeButton.addEventListener(
+  $("closeModal")
+    .addEventListener(
       "click",
       closeReportForm
     );
-  }
 
-  const cancelButton = $("cancelReport");
+  /* GPS */
 
-  if (cancelButton) {
-    cancelButton.addEventListener(
+  $("getLocation")
+    .addEventListener(
       "click",
-      closeReportForm
+      async () => {
+
+        $("locationStatus").textContent =
+          "Obteniendo ubicación...";
+
+        try {
+
+          const location =
+            await getLocation();
+
+          currentLocation =
+            location;
+
+          $("locationStatus").textContent =
+            `📍 Ubicación obtenida ±${Math.round(location.accuracy)} m`;
+
+        } catch (error) {
+
+          console.error(error);
+
+          $("locationStatus").textContent =
+            "⚠️ No se pudo obtener la ubicación.";
+        }
+      }
     );
-  }
 
-  const publishButton = $("publishReport");
+  /* FOTO */
 
-  if (publishButton) {
-    publishButton.addEventListener(
-      "click",
-      publishReport
-    );
-  }
-
-  const photoInput = $("photoInput");
-
-  if (photoInput) {
-    photoInput.addEventListener(
+  $("photo")
+    .addEventListener(
       "change",
       handlePhoto
     );
-  }
 
-  const videoInput = $("videoInput");
+  /* VIDEO */
 
-  if (videoInput) {
-    videoInput.addEventListener(
+  $("video")
+    .addEventListener(
       "change",
       handleVideo
     );
-  }
 
-  const locateButton = $("locateButton");
+  /* FORMULARIO */
 
-  if (locateButton) {
-    locateButton.addEventListener(
+  $("reportForm")
+    .addEventListener(
+      "submit",
+      event => {
+
+        event.preventDefault();
+
+        publishReport();
+      }
+    );
+
+  /* UBICACIÓN DEL ENCABEZADO */
+
+  $("locateBtn")
+    .addEventListener(
       "click",
       async () => {
 
@@ -893,11 +1004,11 @@ function setupEvents() {
                 radius: 8
               }
             )
-            .addTo(map)
-            .bindPopup(
-              "📍 Tu ubicación"
-            )
-            .openPopup();
+              .addTo(map)
+              .bindPopup(
+                "📍 Tu ubicación"
+              )
+              .openPopup();
           }
 
         } catch (error) {
@@ -905,16 +1016,28 @@ function setupEvents() {
           alert(
             "No se pudo obtener tu ubicación."
           );
-
         }
-
       }
     );
+
+  /* CERRAR DETALLE */
+
+  if ($("closeDetail")) {
+
+    $("closeDetail")
+      .addEventListener(
+        "click",
+        () => {
+          $("detailModal")
+            .classList
+            .add("hidden");
+        }
+      );
   }
 }
 
 /* =========================
-   INICIALIZACIÓN
+   INICIAR
 ========================= */
 
 document.addEventListener(
