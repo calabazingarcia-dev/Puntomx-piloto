@@ -4,6 +4,7 @@ const SUPABASE_KEY = "sb_publishable_S2hNm3j2F_08I8aFQXwzog_TA82P26h";
 const REPORTS_API = `${SUPABASE_URL}/rest/v1/reports`;
 const STORAGE_API = `${SUPABASE_URL}/storage/v1/object`;
 const STORAGE_PUBLIC = `${SUPABASE_URL}/storage/v1/object/public/reports`;
+const AUTH_API = `${SUPABASE_URL}/auth/v1`;
 
 let map;
 let markersLayer;
@@ -12,12 +13,23 @@ let currentLocation = null;
 let selectedPhoto = null;
 let selectedVideo = null;
 
+let currentUser = null;
+let accessToken = null;
+
+
+/* =========================
+   UTILIDADES
+========================= */
+
 function $(id) {
   return document.getElementById(id);
 }
 
 function escapeHtml(value) {
-  if (value === null || value === undefined) return "";
+
+  if (value === null || value === undefined) {
+    return "";
+  }
 
   return String(value)
     .replace(/&/g, "&amp;")
@@ -28,100 +40,651 @@ function escapeHtml(value) {
 }
 
 function generateReportCode() {
-  return "MX-" + Math.floor(10000000 + Math.random() * 90000000);
+
+  return "MX-" +
+    Math.floor(
+      10000000 +
+      Math.random() * 90000000
+    );
 }
+
+
+/* =========================
+   AUTENTICACIÓN
+========================= */
+
+function authHeaders() {
+
+  return {
+    apikey: SUPABASE_KEY,
+    Authorization:
+      `Bearer ${accessToken || SUPABASE_KEY}`
+  };
+}
+
+
+/* =========================
+   OBTENER SESIÓN
+========================= */
+
+async function getSession() {
+
+  const savedSession =
+    localStorage.getItem("puntomx_session");
+
+  if (!savedSession) {
+    currentUser = null;
+    accessToken = null;
+    updateAuthUI();
+    return;
+  }
+
+  try {
+
+    const session =
+      JSON.parse(savedSession);
+
+    if (
+      !session.access_token ||
+      !session.user
+    ) {
+
+      localStorage.removeItem(
+        "puntomx_session"
+      );
+
+      currentUser = null;
+      accessToken = null;
+
+      updateAuthUI();
+
+      return;
+    }
+
+    accessToken =
+      session.access_token;
+
+    currentUser =
+      session.user;
+
+    /*
+      Comprobamos que el token
+      siga siendo válido.
+    */
+
+    const response =
+      await fetch(
+        `${AUTH_API}/user`,
+        {
+          headers: authHeaders()
+        }
+      );
+
+    if (!response.ok) {
+
+      localStorage.removeItem(
+        "puntomx_session"
+      );
+
+      currentUser = null;
+      accessToken = null;
+
+    } else {
+
+      currentUser =
+        await response.json();
+    }
+
+  } catch (error) {
+
+    console.error(
+      "Error recuperando sesión:",
+      error
+    );
+
+    localStorage.removeItem(
+      "puntomx_session"
+    );
+
+    currentUser = null;
+    accessToken = null;
+  }
+
+  updateAuthUI();
+}
+
+
+/* =========================
+   INTERFAZ DE USUARIO
+========================= */
+
+function updateAuthUI() {
+
+  const authArea =
+    $("authArea");
+
+  if (!authArea) {
+    return;
+  }
+
+  if (currentUser) {
+
+    const email =
+      escapeHtml(
+        currentUser.email || ""
+      );
+
+    authArea.innerHTML = `
+
+      <div style="
+        display:flex;
+        align-items:center;
+        gap:8px;
+      ">
+
+        <span style="
+          font-size:12px;
+          max-width:150px;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          white-space:nowrap;
+        ">
+          👤 ${email}
+        </span>
+
+        <button
+          id="logoutBtn"
+          class="secondary"
+          type="button"
+        >
+          Salir
+        </button>
+
+      </div>
+    `;
+
+    $("logoutBtn")
+      .addEventListener(
+        "click",
+        logout
+      );
+
+  } else {
+
+    authArea.innerHTML = `
+
+      <button
+        id="loginBtn"
+        class="secondary"
+        type="button"
+      >
+        👤 Iniciar sesión
+      </button>
+
+    `;
+
+    $("loginBtn")
+      .addEventListener(
+        "click",
+        openAuthModal
+      );
+  }
+}
+
+
+/* =========================
+   ABRIR LOGIN
+========================= */
+
+function openAuthModal() {
+
+  $("authModal")
+    .classList
+    .remove("hidden");
+
+  $("authMessage")
+    .textContent = "";
+
+  $("authForm")
+    .reset();
+
+  $("authSubmit")
+    .textContent =
+    "Iniciar sesión";
+}
+
+
+/* =========================
+   CERRAR LOGIN
+========================= */
+
+function closeAuthModal() {
+
+  $("authModal")
+    .classList
+    .add("hidden");
+}
+
+
+/* =========================
+   INICIAR SESIÓN
+========================= */
+
+async function loginUser() {
+
+  const email =
+    $("authEmail")
+      .value
+      .trim();
+
+  const password =
+    $("authPassword")
+      .value;
+
+  if (!email || !password) {
+
+    $("authMessage")
+      .textContent =
+      "Escribe tu correo y contraseña.";
+
+    return;
+  }
+
+  $("authSubmit")
+    .disabled = true;
+
+  $("authSubmit")
+    .textContent =
+    "Iniciando sesión...";
+
+  $("authMessage")
+    .textContent = "";
+
+  try {
+
+    const response =
+      await fetch(
+        `${AUTH_API}/token?grant_type=password`,
+        {
+          method: "POST",
+
+          headers: {
+            apikey:
+              SUPABASE_KEY,
+
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              email,
+              password
+            })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+
+      throw new Error(
+        data.msg ||
+        data.message ||
+        data.error_description ||
+        "No fue posible iniciar sesión."
+      );
+    }
+
+    /*
+      Guardamos la sesión
+      solamente en este navegador.
+    */
+
+    localStorage.setItem(
+      "puntomx_session",
+      JSON.stringify(data)
+    );
+
+    accessToken =
+      data.access_token;
+
+    currentUser =
+      data.user;
+
+    updateAuthUI();
+
+    closeAuthModal();
+
+    await loadReports();
+
+    alert(
+      "Sesión iniciada correctamente."
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Error de inicio de sesión:",
+      error
+    );
+
+    $("authMessage")
+      .textContent =
+      error.message;
+
+  } finally {
+
+    $("authSubmit")
+      .disabled = false;
+
+    $("authSubmit")
+      .textContent =
+      "Iniciar sesión";
+  }
+}
+
+
+/* =========================
+   CREAR CUENTA
+========================= */
+
+async function signupUser() {
+
+  const email =
+    $("authEmail")
+      .value
+      .trim();
+
+  const password =
+    $("authPassword")
+      .value;
+
+  if (!email || !password) {
+
+    $("authMessage")
+      .textContent =
+      "Escribe correo y contraseña para crear la cuenta.";
+
+    return;
+  }
+
+  if (password.length < 6) {
+
+    $("authMessage")
+      .textContent =
+      "La contraseña debe tener al menos 6 caracteres.";
+
+    return;
+  }
+
+  $("signupBtn")
+    .disabled = true;
+
+  $("signupBtn")
+    .textContent =
+    "Creando cuenta...";
+
+  $("authMessage")
+    .textContent = "";
+
+  try {
+
+    const response =
+      await fetch(
+        `${AUTH_API}/signup`,
+        {
+          method: "POST",
+
+          headers: {
+            apikey:
+              SUPABASE_KEY,
+
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              email,
+              password
+            })
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+
+      throw new Error(
+        data.msg ||
+        data.message ||
+        data.error_description ||
+        "No fue posible crear la cuenta."
+      );
+    }
+
+    /*
+      Si Confirm email está activado,
+      Supabase normalmente pedirá
+      confirmar el correo.
+    */
+
+    if (
+      data.user &&
+      !data.access_token
+    ) {
+
+      $("authMessage")
+        .textContent =
+        "Cuenta creada. Revisa tu correo para confirmar la cuenta.";
+
+      return;
+    }
+
+    /*
+      Si Supabase devuelve sesión
+      inmediatamente, guardamos sesión.
+    */
+
+    if (
+      data.access_token &&
+      data.user
+    ) {
+
+      localStorage.setItem(
+        "puntomx_session",
+        JSON.stringify(data)
+      );
+
+      accessToken =
+        data.access_token;
+
+      currentUser =
+        data.user;
+
+      updateAuthUI();
+
+      closeAuthModal();
+
+      await loadReports();
+
+      alert(
+        "Cuenta creada correctamente."
+      );
+    }
+
+  } catch (error) {
+
+    console.error(
+      "Error creando cuenta:",
+      error
+    );
+
+    $("authMessage")
+      .textContent =
+      error.message;
+
+  } finally {
+
+    $("signupBtn")
+      .disabled = false;
+
+    $("signupBtn")
+      .textContent =
+      "Crear cuenta";
+  }
+}
+
+
+/* =========================
+   CERRAR SESIÓN
+========================= */
+
+function logout() {
+
+  localStorage.removeItem(
+    "puntomx_session"
+  );
+
+  currentUser = null;
+  accessToken = null;
+
+  updateAuthUI();
+
+  alert(
+    "Sesión cerrada."
+  );
+}
+
 
 /* =========================
    MAPA
 ========================= */
 
 function initMap() {
+
   if (typeof L === "undefined") {
-    console.error("Leaflet no está cargado.");
+
+    console.error(
+      "Leaflet no está cargado."
+    );
+
     return;
   }
 
-  map = L.map("map").setView([23.6345, -102.5528], 5);
+  map =
+    L.map("map")
+      .setView(
+        [23.6345, -102.5528],
+        5
+      );
 
   L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     {
       maxZoom: 19,
-      attribution: "&copy; OpenStreetMap"
+      attribution:
+        "&copy; OpenStreetMap"
     }
   ).addTo(map);
 
-  markersLayer = L.layerGroup().addTo(map);
+  markersLayer =
+    L.layerGroup()
+      .addTo(map);
 
   setTimeout(() => {
+
     map.invalidateSize();
+
   }, 300);
 }
+
 
 /* =========================
    REPORTES
 ========================= */
 
 async function loadReports() {
+
   try {
-    const response = await fetch(
-      `${REPORTS_API}?select=*&order=created_at.desc`,
-      {
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`
+
+    const response =
+      await fetch(
+        `${REPORTS_API}?select=*&order=created_at.desc`,
+        {
+          headers: authHeaders()
         }
-      }
-    );
+      );
 
     if (!response.ok) {
-      throw new Error(await response.text());
+
+      throw new Error(
+        await response.text()
+      );
     }
 
-    reports = await response.json();
+    reports =
+      await response.json();
 
     renderReports();
     updateStats();
     renderReportList();
 
   } catch (error) {
-    console.error("Error cargando reportes:", error);
+
+    console.error(
+      "Error cargando reportes:",
+      error
+    );
   }
 }
+
 
 /* =========================
    MARCADORES
 ========================= */
 
 function renderReports() {
-  if (!map || !markersLayer) return;
+
+  if (!map || !markersLayer) {
+    return;
+  }
 
   markersLayer.clearLayers();
 
-  reports.forEach(report => {
+  reports.forEach(
+    report => {
 
-    if (
-      typeof report.latitude !== "number" ||
-      typeof report.longitude !== "number"
-    ) {
-      return;
-    }
-
-    const marker = L.marker([
-      report.latitude,
-      report.longitude
-    ]);
-
-    marker.bindPopup(
-      createPopupContent(report),
-      {
-        maxWidth: 320
+      if (
+        typeof report.latitude !== "number" ||
+        typeof report.longitude !== "number"
+      ) {
+        return;
       }
-    );
 
-    marker.addTo(markersLayer);
-  });
+      const marker =
+        L.marker([
+          report.latitude,
+          report.longitude
+        ]);
+
+      marker.bindPopup(
+        createPopupContent(report),
+        {
+          maxWidth: 320
+        }
+      );
+
+      marker.addTo(
+        markersLayer
+      );
+    }
+  );
 }
+
 
 /* =========================
    POPUP
@@ -129,21 +692,29 @@ function renderReports() {
 
 function createPopupContent(report) {
 
-  const type = escapeHtml(
-    report.type || "Problema reportado"
-  );
+  const type =
+    escapeHtml(
+      report.type ||
+      "Problema reportado"
+    );
 
-  const description = escapeHtml(
-    report.description || "Sin descripción."
-  );
+  const description =
+    escapeHtml(
+      report.description ||
+      "Sin descripción."
+    );
 
-  const status = escapeHtml(
-    report.status || "Pendiente"
-  );
+  const status =
+    escapeHtml(
+      report.status ||
+      "Pendiente"
+    );
 
-  const code = escapeHtml(
-    report.report_code || ""
-  );
+  const code =
+    escapeHtml(
+      report.report_code ||
+      ""
+    );
 
   let media = "";
 
@@ -242,21 +813,25 @@ function createPopupContent(report) {
   `;
 }
 
+
 /* =========================
    FOTO GRANDE
 ========================= */
 
 function openMedia(url, type) {
 
-  const existing = $("mediaViewer");
+  const existing =
+    $("mediaViewer");
 
   if (existing) {
     existing.remove();
   }
 
-  const viewer = document.createElement("div");
+  const viewer =
+    document.createElement("div");
 
-  viewer.id = "mediaViewer";
+  viewer.id =
+    "mediaViewer";
 
   viewer.innerHTML = `
     <div
@@ -287,17 +862,21 @@ function openMedia(url, type) {
     </div>
   `;
 
-  document.body.appendChild(viewer);
+  document.body.appendChild(
+    viewer
+  );
 }
 
 function closeMediaViewer() {
 
-  const viewer = $("mediaViewer");
+  const viewer =
+    $("mediaViewer");
 
   if (viewer) {
     viewer.remove();
   }
 }
+
 
 /* =========================
    ESTADÍSTICAS
@@ -305,28 +884,42 @@ function closeMediaViewer() {
 
 function updateStats() {
 
-  const total = reports.length;
+  const total =
+    reports.length;
 
-  const pending = reports.filter(
-    r => (r.status || "Pendiente") === "Pendiente"
-  ).length;
+  const pending =
+    reports.filter(
+      r =>
+        (r.status || "Pendiente") ===
+        "Pendiente"
+    ).length;
 
-  const resolved = reports.filter(
-    r => (r.status || "") === "Resuelto"
-  ).length;
+  const resolved =
+    reports.filter(
+      r =>
+        (r.status || "") ===
+        "Resuelto"
+    ).length;
 
   if ($("totalCount")) {
-    $("totalCount").textContent = total;
+    $("totalCount")
+      .textContent =
+      total;
   }
 
   if ($("pendingCount")) {
-    $("pendingCount").textContent = pending;
+    $("pendingCount")
+      .textContent =
+      pending;
   }
 
   if ($("resolvedCount")) {
-    $("resolvedCount").textContent = resolved;
+    $("resolvedCount")
+      .textContent =
+      resolved;
   }
 }
+
 
 /* =========================
    LISTA DE REPORTES
@@ -334,9 +927,12 @@ function updateStats() {
 
 function renderReportList() {
 
-  const container = $("reports");
+  const container =
+    $("reports");
 
-  if (!container) return;
+  if (!container) {
+    return;
+  }
 
   if (reports.length === 0) {
 
@@ -353,42 +949,52 @@ function renderReportList() {
     return;
   }
 
-  container.innerHTML = reports.map(report => {
+  container.innerHTML =
+    reports.map(
+      report => {
 
-    return `
-      <div style="
-        border:1px solid #ddd;
-        border-radius:10px;
-        padding:12px;
-        margin-bottom:10px;
-      ">
+        return `
+          <div style="
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:12px;
+            margin-bottom:10px;
+          ">
 
-        <strong>
-          ${escapeHtml(report.type)}
-        </strong>
+            <strong>
+              ${escapeHtml(report.type)}
+            </strong>
 
-        <div style="
-          font-size:13px;
-          margin-top:5px;
-        ">
-          ${escapeHtml(report.description || "")}
-        </div>
+            <div style="
+              font-size:13px;
+              margin-top:5px;
+            ">
+              ${escapeHtml(
+                report.description || ""
+              )}
+            </div>
 
-        <div style="
-          font-size:12px;
-          color:#666;
-          margin-top:6px;
-        ">
-          ${escapeHtml(report.report_code)}
-          ·
-          ${escapeHtml(report.status || "Pendiente")}
-        </div>
+            <div style="
+              font-size:12px;
+              color:#666;
+              margin-top:6px;
+            ">
+              ${escapeHtml(
+                report.report_code
+              )}
+              ·
+              ${escapeHtml(
+                report.status ||
+                "Pendiente"
+              )}
+            </div>
 
-      </div>
-    `;
-
-  }).join("");
+          </div>
+        `;
+      }
+    ).join("");
 }
+
 
 /* =========================
    GPS
@@ -396,51 +1002,56 @@ function renderReportList() {
 
 function getLocation() {
 
-  return new Promise((resolve, reject) => {
+  return new Promise(
+    (resolve, reject) => {
 
-    if (!navigator.geolocation) {
+      if (!navigator.geolocation) {
 
-      reject(
-        new Error(
-          "Este dispositivo no permite obtener GPS."
-        )
-      );
+        reject(
+          new Error(
+            "Este dispositivo no permite obtener GPS."
+          )
+        );
 
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-
-      position => {
-
-        currentLocation = {
-
-          latitude:
-            position.coords.latitude,
-
-          longitude:
-            position.coords.longitude,
-
-          accuracy:
-            position.coords.accuracy
-
-        };
-
-        resolve(currentLocation);
-      },
-
-      error => {
-        reject(error);
-      },
-
-      {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
+        return;
       }
-    );
-  });
+
+      navigator.geolocation.getCurrentPosition(
+
+        position => {
+
+          currentLocation = {
+
+            latitude:
+              position.coords.latitude,
+
+            longitude:
+              position.coords.longitude,
+
+            accuracy:
+              position.coords.accuracy
+          };
+
+          resolve(
+            currentLocation
+          );
+        },
+
+        error => {
+
+          reject(error);
+        },
+
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    }
+  );
 }
+
 
 /* =========================
    ABRIR FORMULARIO
@@ -448,7 +1059,16 @@ function getLocation() {
 
 function openReportForm() {
 
-  $("modal").classList.remove("hidden");
+  /*
+    Por ahora mantenemos el
+    formulario disponible.
+    Después podremos exigir
+    login para publicar.
+  */
+
+  $("modal")
+    .classList
+    .remove("hidden");
 
   selectedPhoto = null;
   selectedVideo = null;
@@ -458,16 +1078,19 @@ function openReportForm() {
 
   $("preview").innerHTML = "";
 
-  $("locationStatus").textContent =
+  $("locationStatus")
+    .textContent =
     "Obteniendo ubicación...";
 
   getLocation()
 
     .then(location => {
 
-      currentLocation = location;
+      currentLocation =
+        location;
 
-      $("locationStatus").textContent =
+      $("locationStatus")
+        .textContent =
         `📍 Ubicación obtenida ±${Math.round(location.accuracy)} m`;
 
     })
@@ -476,16 +1099,19 @@ function openReportForm() {
 
       console.error(error);
 
-      $("locationStatus").textContent =
+      $("locationStatus")
+        .textContent =
         "⚠️ No se pudo obtener la ubicación.";
-
     });
 }
 
 function closeReportForm() {
 
-  $("modal").classList.add("hidden");
+  $("modal")
+    .classList
+    .add("hidden");
 }
+
 
 /* =========================
    FOTO
@@ -493,13 +1119,18 @@ function closeReportForm() {
 
 function handlePhoto(event) {
 
-  const file = event.target.files[0];
+  const file =
+    event.target.files[0];
 
-  if (!file) return;
+  if (!file) {
+    return;
+  }
 
-  selectedPhoto = file;
+  selectedPhoto =
+    file;
 
-  const url = URL.createObjectURL(file);
+  const url =
+    URL.createObjectURL(file);
 
   $("preview").innerHTML = `
     <div style="margin-top:10px;">
@@ -518,77 +1149,96 @@ function handlePhoto(event) {
   `;
 }
 
+
 /* =========================
    VIDEO
 ========================= */
 
 function handleVideo(event) {
 
-  const file = event.target.files[0];
+  const file =
+    event.target.files[0];
 
-  if (!file) return;
+  if (!file) {
+    return;
+  }
 
-  selectedVideo = null;
+  selectedVideo =
+    null;
 
-  const video = document.createElement("video");
+  const video =
+    document.createElement("video");
 
-  video.preload = "metadata";
+  video.preload =
+    "metadata";
 
-  video.onloadedmetadata = () => {
+  video.onloadedmetadata =
+    () => {
 
-    URL.revokeObjectURL(video.src);
-
-    if (video.duration > 10.05) {
-
-      alert(
-        "El video no puede durar más de 10 segundos."
+      URL.revokeObjectURL(
+        video.src
       );
 
-      event.target.value = "";
+      if (video.duration > 10.05) {
 
-      selectedVideo = null;
+        alert(
+          "El video no puede durar más de 10 segundos."
+        );
 
-      return;
-    }
+        event.target.value =
+          "";
 
-    selectedVideo = file;
+        selectedVideo =
+          null;
 
-    const url = URL.createObjectURL(file);
+        return;
+      }
 
-    $("preview").innerHTML += `
-      <div style="margin-top:10px;">
+      selectedVideo =
+        file;
 
-        <video
-          controls
-          playsinline
-          style="
-            width:100%;
-            max-height:220px;
-            border-radius:10px;
-          "
-        >
+      const url =
+        URL.createObjectURL(file);
 
-          <source src="${url}">
+      $("preview").innerHTML += `
+        <div style="margin-top:10px;">
 
-        </video>
+          <video
+            controls
+            playsinline
+            style="
+              width:100%;
+              max-height:220px;
+              border-radius:10px;
+            "
+          >
 
-      </div>
-    `;
-  };
+            <source src="${url}">
 
-  video.onerror = () => {
+          </video>
 
-    alert(
-      "No fue posible comprobar la duración del video."
-    );
+        </div>
+      `;
+    };
 
-    event.target.value = "";
+  video.onerror =
+    () => {
 
-    selectedVideo = null;
-  };
+      alert(
+        "No fue posible comprobar la duración del video."
+      );
 
-  video.src = URL.createObjectURL(file);
+      event.target.value =
+        "";
+
+      selectedVideo =
+        null;
+    };
+
+  video.src =
+    URL.createObjectURL(file);
 }
+
 
 /* =========================
    SUBIR ARCHIVO
@@ -600,7 +1250,9 @@ async function uploadFile(
   prefix
 ) {
 
-  if (!file) return null;
+  if (!file) {
+    return null;
+  }
 
   const extension =
     file.name.includes(".")
@@ -615,24 +1267,32 @@ async function uploadFile(
   const url =
     `${STORAGE_API}/reports/${filename}`;
 
-  const response = await fetch(
-    url,
-    {
-      method: "POST",
+  const response =
+    await fetch(
+      url,
+      {
+        method: "POST",
 
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization:
-          `Bearer ${SUPABASE_KEY}`,
+        headers: {
 
-        "Content-Type":
-          file.type ||
-          "application/octet-stream"
-      },
+          apikey:
+            SUPABASE_KEY,
 
-      body: file
-    }
-  );
+          Authorization:
+            `Bearer ${
+              accessToken ||
+              SUPABASE_KEY
+            }`,
+
+          "Content-Type":
+            file.type ||
+            "application/octet-stream"
+        },
+
+        body:
+          file
+      }
+    );
 
   if (!response.ok) {
 
@@ -653,6 +1313,7 @@ async function uploadFile(
   return `${STORAGE_PUBLIC}/${filename}`;
 }
 
+
 /* =========================
    PUBLICAR REPORTE
 ========================= */
@@ -663,7 +1324,9 @@ async function publishReport() {
     $("type").value;
 
   const description =
-    $("description").value.trim();
+    $("description")
+      .value
+      .trim();
 
   if (!type) {
 
@@ -692,8 +1355,10 @@ async function publishReport() {
     return;
   }
 
-  if (!selectedPhoto &&
-      !selectedVideo) {
+  if (
+    !selectedPhoto &&
+    !selectedVideo
+  ) {
 
     alert(
       "Agrega una fotografía o un video."
@@ -706,20 +1371,28 @@ async function publishReport() {
     generateReportCode();
 
   const publishButton =
-    $("reportForm").querySelector(
-      'button[type="submit"]'
-    );
+    $("reportForm")
+      .querySelector(
+        'button[type="submit"]'
+      );
 
   if (publishButton) {
-    publishButton.disabled = true;
+
+    publishButton.disabled =
+      true;
+
     publishButton.textContent =
       "Publicando...";
   }
 
   try {
 
-    let photoUrl = null;
-    let videoUrl = null;
+    let photoUrl =
+      null;
+
+    let videoUrl =
+      null;
+
 
     /* FOTO */
 
@@ -733,6 +1406,7 @@ async function publishReport() {
         );
     }
 
+
     /* VIDEO */
 
     if (selectedVideo) {
@@ -744,6 +1418,7 @@ async function publishReport() {
           "video"
         );
     }
+
 
     /* BASE DE DATOS */
 
@@ -774,8 +1449,20 @@ async function publishReport() {
         videoUrl,
 
       status:
-        "Pendiente"
+        "Pendiente",
+
+      /*
+        NUEVO:
+        asociamos el reporte
+        con el usuario conectado.
+      */
+
+      user_id:
+        currentUser
+          ? currentUser.id
+          : null
     };
+
 
     const response =
       await fetch(
@@ -789,7 +1476,10 @@ async function publishReport() {
               SUPABASE_KEY,
 
             Authorization:
-              `Bearer ${SUPABASE_KEY}`,
+              `Bearer ${
+                accessToken ||
+                SUPABASE_KEY
+              }`,
 
             "Content-Type":
               "application/json",
@@ -802,6 +1492,7 @@ async function publishReport() {
             JSON.stringify(body)
         }
       );
+
 
     if (!response.ok) {
 
@@ -819,23 +1510,37 @@ async function publishReport() {
       );
     }
 
+
     const created =
       await response.json();
 
+
     closeReportForm();
 
-    $("reportForm").reset();
+    $("reportForm")
+      .reset();
 
-    currentLocation = null;
-    selectedPhoto = null;
-    selectedVideo = null;
+    currentLocation =
+      null;
 
-    $("preview").innerHTML = "";
+    selectedPhoto =
+      null;
 
-    $("locationStatus").textContent =
+    selectedVideo =
+      null;
+
+    $("preview")
+      .innerHTML = "";
+
+    $("locationStatus")
+      .textContent =
       "Aún no obtenida";
 
-    if (created && created[0]) {
+
+    if (
+      created &&
+      created[0]
+    ) {
 
       reports.unshift(
         created[0]
@@ -844,12 +1549,15 @@ async function publishReport() {
     } else {
 
       await loadReports();
-
     }
 
+
     renderReports();
+
     renderReportList();
+
     updateStats();
+
 
     if (map) {
 
@@ -860,12 +1568,13 @@ async function publishReport() {
         ],
         16
       );
-
     }
+
 
     alert(
       `Reporte ${reportCode} creado correctamente.`
     );
+
 
   } catch (error) {
 
@@ -879,11 +1588,13 @@ async function publishReport() {
       error.message
     );
 
+
   } finally {
 
     if (publishButton) {
 
-      publishButton.disabled = false;
+      publishButton.disabled =
+        false;
 
       publishButton.textContent =
         "Publicar reporte";
@@ -891,11 +1602,13 @@ async function publishReport() {
   }
 }
 
+
 /* =========================
    EVENTOS
 ========================= */
 
 function setupEvents() {
+
 
   /* NUEVO REPORTE */
 
@@ -905,13 +1618,43 @@ function setupEvents() {
       openReportForm
     );
 
-  /* CERRAR MODAL */
+
+  /* CERRAR REPORTE */
 
   $("closeModal")
     .addEventListener(
       "click",
       closeReportForm
     );
+
+
+  /* LOGIN */
+
+  $("closeAuthModal")
+    .addEventListener(
+      "click",
+      closeAuthModal
+    );
+
+
+  $("authForm")
+    .addEventListener(
+      "submit",
+      event => {
+
+        event.preventDefault();
+
+        loginUser();
+      }
+    );
+
+
+  $("signupBtn")
+    .addEventListener(
+      "click",
+      signupUser
+    );
+
 
   /* GPS */
 
@@ -920,7 +1663,8 @@ function setupEvents() {
       "click",
       async () => {
 
-        $("locationStatus").textContent =
+        $("locationStatus")
+          .textContent =
           "Obteniendo ubicación...";
 
         try {
@@ -931,18 +1675,21 @@ function setupEvents() {
           currentLocation =
             location;
 
-          $("locationStatus").textContent =
+          $("locationStatus")
+            .textContent =
             `📍 Ubicación obtenida ±${Math.round(location.accuracy)} m`;
 
         } catch (error) {
 
           console.error(error);
 
-          $("locationStatus").textContent =
+          $("locationStatus")
+            .textContent =
             "⚠️ No se pudo obtener la ubicación.";
         }
       }
     );
+
 
   /* FOTO */
 
@@ -952,6 +1699,7 @@ function setupEvents() {
       handlePhoto
     );
 
+
   /* VIDEO */
 
   $("video")
@@ -959,6 +1707,7 @@ function setupEvents() {
       "change",
       handleVideo
     );
+
 
   /* FORMULARIO */
 
@@ -972,6 +1721,7 @@ function setupEvents() {
         publishReport();
       }
     );
+
 
   /* UBICACIÓN DEL ENCABEZADO */
 
@@ -1020,6 +1770,7 @@ function setupEvents() {
       }
     );
 
+
   /* CERRAR DETALLE */
 
   if ($("closeDetail")) {
@@ -1028,6 +1779,7 @@ function setupEvents() {
       .addEventListener(
         "click",
         () => {
+
           $("detailModal")
             .classList
             .add("hidden");
@@ -1035,6 +1787,7 @@ function setupEvents() {
       );
   }
 }
+
 
 /* =========================
    INICIAR
@@ -1051,6 +1804,8 @@ document.addEventListener(
     initMap();
 
     setupEvents();
+
+    await getSession();
 
     await loadReports();
 
